@@ -1,58 +1,42 @@
-name: Build PDF EXE and Release
+name: Build and Release EXE
 
 on:
   push:
     tags:
-      - 'v*.*.*' # Trigger on version tags like v1.0.0, v0.1.0, etc.
+      - 'v*'  # Only run on version tags like v1.0, v1.2.3 etc.
 
 jobs:
-  build-and-release: # Renamed job for clarity
+  build:
     runs-on: windows-latest
-    permissions:
-      contents: write # This permission is required to create releases and upload assets
 
     steps:
-    - name: Checkout repository
-      uses: actions/checkout@v4 # Updated to v4
+      - name: Checkout code
+        uses: actions/checkout@v3
 
-    - name: Set up Python
-      uses: actions/setup-python@v5 # Updated to v5
-      with:
-        python-version: '3.10'
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.10'
 
-    - name: Install dependencies
-      run: |
-        python -m pip install --upgrade pip
-        pip install pyinstaller
-        # It's good practice to check if requirements.txt exists
-        if (Test-Path requirements.txt) {
-          pip install -r requirements.txt
-        } else {
-          Write-Host "requirements.txt not found, skipping."
-        }
-      shell: pwsh # Using PowerShell for if statement, works well on Windows runner
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install pyinstaller
 
-    - name: Build EXE using PyInstaller
-      run: |
-        pyinstaller --onefile PDF.py
+      - name: Build EXE using PyInstaller
+        run: pyinstaller --onefile PDF.py
 
-    - name: Create Release and Upload Asset
-      uses: softprops/action-gh-release@v1 # Use v1 for stability
-      # This step only runs if the previous steps were successful
-      # And only for tag pushes due to the 'on' trigger
-      with:
-        # The tag_name will be extracted automatically from the pushed tag (e.g., v1.0.0)
-        # tag_name: ${{ github.ref_name }} # This is the default, so not strictly needed
-        name: Release ${{ github.ref_name }} # Name of the release (e.g., "Release v1.0.0")
-        # body: | # Optional: Add release notes here
-        #   This is the release of version ${{ github.ref_name }}.
-        #   - New features
-        #   - Bug fixes
-        # draft: false # Set to true if you want to create a draft release
-        # prerelease: false # Set to true if this is a pre-release
-        files: |
-          dist/PDF.exe
-          # You can add more files here, one per line, if needed
-          # e.g., dist/another_file.zip
-      env:
-        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }} # This token is automatically provided by GitHub
+      - name: Create GitHub Release
+        id: create_release
+        uses: softprops/action-gh-release@v1
+        with:
+          tag_name: ${{ github.ref_name }}
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Upload EXE to Release
+        uses: softprops/action-gh-release@v1
+        with:
+          files: dist/PDF.exe
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
