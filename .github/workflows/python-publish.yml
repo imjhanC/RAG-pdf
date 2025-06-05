@@ -1,9 +1,9 @@
-name: Build PDF EXE
+name: Build & Release PDF EXE
 
 on:
   push:
-    branches:
-      - main
+    tags:
+      - 'v1.0.0' # e.g., v1.0.0, v2.1.3
 
 jobs:
   build:
@@ -25,11 +25,19 @@ jobs:
         pip install -r requirements.txt
 
     - name: Build EXE using PyInstaller
-      run: |
-        pyinstaller --onefile PDF.py
+      run: pyinstaller --onefile PDF.py
 
-    - name: Upload EXE artifact
-      uses: actions/upload-artifact@v4
+    - name: Create GitHub Release
+      uses: softprops/action-gh-release@v1
       with:
-        name: PDF-executable
-        path: dist/PDF.exe
+        tag_name: ${{ github.ref_name }}
+        name: Release ${{ github.ref_name }}
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+    - name: Upload EXE to Release
+      uses: softprops/action-gh-release@v1
+      with:
+        files: dist/PDF.exe
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
