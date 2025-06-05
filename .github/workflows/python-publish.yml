@@ -1,36 +1,101 @@
-name: Build Windows EXE
+name: Build and Release Python EXE
 
 on:
   push:
     tags:
-      - 'v*'
-  workflow_dispatch:
+      - 'v*'  # Triggers on version tags like v1.0.0
+  workflow_dispatch:  # Allows manual triggering
 
 jobs:
-  build-windows:
-    runs-on: windows-latest
-    
+  build:
+    runs-on: ${{ matrix.os }}
+    strategy:
+      matrix:
+        os: [windows-latest, ubuntu-latest, macos-latest]
+        include:
+          - os: windows-latest
+            artifact_name: PDF-py.exe
+            asset_name: PDF-py-windows.exe
+          - os: ubuntu-latest
+            artifact_name: PDF-py
+            asset_name: PDF-py-linux
+          - os: macos-latest
+            artifact_name: PDF-py
+            asset_name: PDF-py-macos
+
     steps:
     - uses: actions/checkout@v4
-    
+
     - name: Set up Python
       uses: actions/setup-python@v4
       with:
         python-version: '3.11'
-    
+
     - name: Install dependencies
       run: |
         python -m pip install --upgrade pip
         pip install pyinstaller
-        pip install -r requirements.txt
-    
-    - name: Build EXE
-      run: pyinstaller --onefile --windowed --name PDF-py PDF.py
-    
-    - name: Create Release
-      uses: softprops/action-gh-release@v1
-      if: startsWith(github.ref, 'refs/tags/')
+        # Install your project dependencies
+        if [ -f requirements.txt ]; then pip install -r requirements.txt; fi
+      shell: bash
+
+    - name: Build executable with PyInstaller
+      run: |
+        pyinstaller --onefile --windowed --name PDF-py PDF.py
+      shell: bash
+
+    - name: Upload artifact
+      uses: actions/upload-artifact@v3
       with:
-        files: dist/PDF-py.exe
+        name: ${{ matrix.asset_name }}
+        path: dist/${{ matrix.artifact_name }}
+
+  release:
+    needs: build
+    runs-on: ubuntu-latest
+    if: startsWith(github.ref, 'refs/tags/')
+
+    steps:
+    - name: Download all artifacts
+      uses: actions/download-artifact@v3
+
+    - name: Create Release
+      id: create_release
+      uses: actions/create-release@v1
       env:
         GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      with:
+        tag_name: ${{ github.ref }}
+        release_name: Release ${{ github.ref }}
+        draft: false
+        prerelease: false
+
+    - name: Upload Windows Release Asset
+      uses: actions/upload-release-asset@v1
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      with:
+        upload_url: ${{ steps.create_release.outputs.upload_url }}
+        asset_path: ./PDF-py-windows/PDF-py.exe
+        asset_name: PDF-py-windows.exe
+        asset_content_type: application/octet-stream
+
+    - name: Upload Linux Release Asset
+      uses: actions/upload-release-asset@v1
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      with:
+        upload_url: ${{ steps.create_release.outputs.upload_url }}
+        asset_path: ./PDF-py-linux/PDF-py
+        asset_name: PDF-py-linux
+        asset_content_type: application/octet-stream
+
+    - name: Upload macOS Release Asset
+      uses: actions/upload-release-asset@v1
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      with:
+        upload_url: ${{ steps.create_release.outputs.upload_url }}
+        asset_path: ./PDF-py-macos/PDF-py
+        asset_name: PDF-py-macos
+        asset_content_type: application/octet-stream
